@@ -129,7 +129,7 @@ module rs(
 
 	logic [CPU_NUM_LANES-1:0][RS_ALLOCATION_WIDTH-1:0][RS_NUM_ENTRIES-1:0] find_free_rs_ety_ar;
 	logic [CPU_NUM_LANES-1:0][RS_ALLOCATION_WIDTH-1:0][RS_NUM_ENTRIES-1:0]  sel_free_rs_ety_ar;
-	logic [CPU_NUM_LANES-1:0][ISSUE_WIDTH_MAX-1:0]                          rs_binding_val_4_sel_ety_ar;
+	logic [CPU_NUM_LANES-1:0][ISSUE_WIDTH_MAX-1:0]                          rs_binding_ln_val_ar;
 	logic [CPU_NUM_LANES-1:0][$clog2(ISSUE_WIDTH_MAX):0]                    alloc_2_lane_count_ar; //can have at max ISSUE_WIDTH_MAX uops push to a single RS lane. However, the # of allocs is set by RS_ALLOCATION_WIDTH
 
   //currently, previous find feeds into the next find.
@@ -148,9 +148,9 @@ module rs(
 		alloc_2_lane_count_ar = '{default:0};
     for (int ln = 0; ln < CPU_NUM_LANES; ln++) begin
 			for (int i = 0; i < ISSUE_WIDTH_MAX; i++) begin
-        rs_binding_val_4_sel_ety_ar[ln][i] = rs_binding_ar[i][ln] & instr_val_ar[i];
-
-				alloc_2_lane_count_ar[ln] += rs_binding_val_4_sel_ety_ar[ln][i];
+	      rs_binding_ln_val_ar[ln][i] = rs_binding_ar[i][ln] & instr_val_ar[i];   
+	      
+				alloc_2_lane_count_ar[ln] += rs_binding_ln_val_ar[ln][i];
 			end
 		end
 	end
@@ -158,7 +158,7 @@ module rs(
   // assign which free entry issuing instruction gets
 	always_comb begin
     for (int ln = 0; ln < CPU_NUM_LANES; ln++) begin
-		 `ONE_1ST_LSB(sel_free_rs_ety_ar[ln][0], rs_binding_val_4_sel_ety_ar[ln]) //scan ISSUE_WIDTH_MAX width
+		 `ONE_1ST_LSB(sel_free_rs_ety_ar[ln][0], rs_binding_ln_val_ar[ln]) //scan ISSUE_WIDTH_MAX width
 			for (int f = 1; f < RS_ALLOCATION_WIDTH; f++) begin
        `ONE_1ST_LSB(sel_free_rs_ety_ar[ln][f], sel_free_rs_ety_ar[ln][f-1])
 			end
@@ -561,17 +561,17 @@ end
 //------------------------------------------------------------------------------------------------------------------------------------------//
 // RS HOUSEKEEPING
 //------------------------------------------------------------------------------------------------------------------------------------------//
-
+  
   always_comb begin
     rs_ety_valid_next_rsv = '{default:0};
 		for (int ln = 0; ln < CPU_NUM_LANES; ln++) begin
       for (int ety = 0; ety < RS_NUM_ENTRIES; ety++) begin
         for (int i = 0; i < ISSUE_WIDTH_MAX; i++) begin
-          invalidate_ety_rsv[ln][ety]   = instruc_2_disp_fu_rsv[ln][ety];
+          invalidate_ety_rsv[ln][ety]    |= instruc_2_disp_fu_rsv[ln][ety];
           
-          rs_ety_valid_next_rsv[ln][ety] = global_rst                  ? 0 :
+          rs_ety_valid_next_rsv[ln][ety] |= global_rst                 ? 0 :
                                          /*invalidate_ety_rsv[ln][ety] ? 0 : */
-                                           issue_free_rs_ety[ln][ety]  & rs_binding_ar[i][ln] ? 1 : 0;
+                                            issue_free_rs_ety[ln][ety] & rs_binding_ar[i][ln] ? 1 : rs_ety_valid_rsv[ln][ety];
         end
       end
     end
